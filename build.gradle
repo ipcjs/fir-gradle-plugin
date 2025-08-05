@@ -5,7 +5,7 @@ buildscript {
         mavenCentral()
         mavenLocal()
     }
-    ext.android_gradle = '7.3.1'
+    ext.android_gradle = '8.7.3'
     dependencies {
         classpath "com.android.tools.build:gradle:$android_gradle"
         //classpath "mobi.cangol.mobile:fir-gradle-plugin:$POM_VERSION"
@@ -18,17 +18,14 @@ allprojects {
         mavenLocal()
     }
     tasks.withType(JavaCompile) {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
         options.encoding = "UTF-8"
     }
 
     tasks.withType(GroovyCompile) {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
         options.encoding = "UTF-8"
     }
-}
-task clean(type: Delete) {
-    delete rootProject.buildDir
 }
