@@ -5,6 +5,17 @@ plugins {
     id 'com.gradle.plugin-publish' version '0.18.0'
 }
 
+repositories {
+    google()
+    mavenCentral()
+    mavenLocal()
+}
+
+// 读取上级目录的gradle.properties文件
+def properties = new Properties()
+properties.load(file('../gradle.properties').newInputStream())
+properties.each { key, value -> project.ext.set(key, value) }
+
 apply from: '../maven_push.gradle'
 
 gradlePlugin {

@@ -1,53 +1,82 @@
 package im.fir.gradle
 
-import com.android.build.gradle.api.ApkVariantOutput
-import com.android.builder.model.ProductFlavor
+
+import com.android.build.api.variant.BuiltArtifactsLoader
+import im.fir.gradle.http.FirClient
 import im.fir.gradle.module.App
 import im.fir.gradle.module.Mapping
-import net.dongliu.apk.parser.ApkParser
+import net.dongliu.apk.parser.ApkFile
 import net.dongliu.apk.parser.bean.Icon
-import org.gradle.api.tasks.TaskAction
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.MapProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.*
 
-class FirPublishApkTask extends FirPublishTask {
-    static def MAX_CHARACTER_LENGTH_FOR_WHATS_NEW_TEXT = 500
-    static def FILE_NAME_FOR_WHATS_NEW_TEXT = "whatsnew"
+abstract class FirPublishApkTask extends DefaultTask {
+    protected FirPublisherPluginExtension firExtension
+    protected BugHdPublisherPluginExtension bugHdExtension
+    protected FirClient client
+    protected App app
 
+    @InputFiles
+    abstract DirectoryProperty getApkFolder()
+
+    @InputFile
+    @Optional
+    abstract RegularFileProperty getMappingFile()
+
+    @Input
+    @Optional
+    abstract MapProperty<String, String> getManifestPlaceholders()
+
+    @Internal
+    abstract Property<BuiltArtifactsLoader> getBuiltArtifactsLoader()
 
     @TaskAction
     publishApk() {
-        super.publish()
-        String changeLog
         def log = project.logger
-
-        def apkOutput = variant.outputs.find { variantOutput -> variantOutput instanceof ApkVariantOutput }
-
-        String apkPath = apkOutput.outputFile.getAbsolutePath()
-        log.info("apkPath ===> " + apkPath)
-        Iterator<ProductFlavor> iterator = variant.productFlavors.iterator()
-        while (iterator.hasNext()) {
-            ProductFlavor flavor = iterator.next()
-            log.info("flavor ===> " + flavor.getName())
-            Map<String, Object> map = flavor.getManifestPlaceholders()
-            if (map.containsKey("FIR_CHANGE_LOG_VALUE")) {
-                changeLog = map.get("FIR_CHANGE_LOG_VALUE")
-
-            }
+        def buildArtifacts = builtArtifactsLoader.get().load(apkFolder.get())
+        if (buildArtifacts?.elements?.size() != 1) {
+            throw new IllegalStateException("Expected one APK file, but found ${buildArtifacts?.elements?.size()} from APK folder ${apkFolder.get()}")
         }
+        def apkArtifact = buildArtifacts.elements.first()
+
+        if (client == null) {
+            client = FirPublisherHelper.init(firExtension)
+        }
+
+        app = new App()
+        app.setBundleId(buildArtifacts.applicationId)
+        app.setAppType("android")
+        app.setBuild(apkArtifact.versionCode.toString())
+        app.setVersion(apkArtifact.versionName)
+
+        def apkPath = apkArtifact.outputFile
+        log.info("apkPath ===> " + apkPath)
         parseApk(apkPath, app)
         app.setAppPath(apkPath)
+
+        String changeLog
+        if (manifestPlaceholders.get().containsKey("FIR_CHANGE_LOG_VALUE")) {
+            changeLog = manifestPlaceholders.get()["FIR_CHANGE_LOG_VALUE"]
+        }
         if (changeLog) {
             app.setChangeLog(changeLog)
         } else if (firExtension.changeLog != null) {
             app.setChangeLog(firExtension.changeLog)
         }
+
         Mapping mapping = null
-        if (variant.mappingFile != null && bugHdExtension != null) {
-            String mappingPath = variant.mappingFile.getAbsolutePath()
+        if (mappingFile.isPresent() && bugHdExtension != null) {
+            String mappingPath = mappingFile.get().asFile.absolutePath
             mapping = new Mapping()
             mapping.setFilePath(mappingPath)
             mapping.setApiToken(bugHdExtension.apiToken)
             mapping.setProjectId(bugHdExtension.projectId)
         }
+
         def shortCode = client.deployFile(app, mapping, firExtension.apiToken)
         String msg
         try {
@@ -57,53 +86,13 @@ class FirPublishApkTask extends FirPublishTask {
             msg = "Short Code: $shortCode"
         }
         log.warn("Uploading ${apkPath} to fir.im finish!\n$msg")
-//        FileContent newApkFile = new FileContent(AndroidPublisherHelper.MIME_TYPE_APK, apkOutput.outputFile)
-
-//        Apk apk = edits.apks()
-//                .upload(variant.applicationId, editId, newApkFile)
-//                .exe -- cute()
-//
-//        Track newTrack = new Track().setVersionCodes([apk.getVersionCode()])
-//        if (extension.track?.equals("rollout")) {
-//            newTrack.setUserFraction(extension.userFraction)
-//        }
-//        edits.tracks()
-//                .update(variant.applicationId, ed itId, extension.track, newTrack)
-//                .execute()
-//
-//        if (inputFolder.exists()) {
-//
-//            // Matches if locale have the correct naming e.g. en-US for play store
-//            inputFolder.eachDirMatch(matcher) { dir ->
-//                File whatsNewFile = new File(dir, FILE_NAME_FOR_WHATS_NEW_TEXT + "-" + extension.track)
-//
-//                if (!whatsNewFile.exists()) {
-//                    whatsNewFile = new File(dir, FILE_NAME_FOR_WHATS_NEW_TEXT)
-//                }
-//
-//                if (whatsNewFile.exists()) {
-//
-//                    def whatsNewText = TaskHelper.readAndTrimFile(whatsNewFile, MAX_CHARACTER_LENGTH_FOR_WHATS_NEW_TEXT, extension.errorOnSizeLimit)
-//                    def locale = dir.name
-//
-//                    ApkListing newApkListing = new ApkListing().setRecentChanges(whatsNewText)
-//                    edits.apklistings()
-//                            .update(variant.applicationId, editId, apk.getVersionCode(), locale, newApkListing)
-//                            .execute()
-//                }
-//            }
-//
-//        }
-//
-//        edits.commit(variant.applicationId, editId).execute()
     }
 
     static App parseApk(String apkPath, App app) {
-        ApkParser apkParser = null
+        ApkFile apkParser = null
         try {
-//            String path = appPath.getAbsolutePath()
             File apkFile = new File(apkPath)
-            apkParser = new ApkParser(apkFile)
+            apkParser = new ApkFile(apkFile)
             Icon icon = apkParser.getIconFile()
             String iconPath = icon.getPath()
             app.setName(apkParser.apkMeta.name)
@@ -117,7 +106,7 @@ class FirPublishApkTask extends FirPublishTask {
             e.printStackTrace()
         } finally {
             try {
-                apkParser.close()
+                apkParser?.close()
             } catch (IOException e) {
                 e.printStackTrace()
             }

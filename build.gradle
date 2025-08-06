@@ -5,10 +5,8 @@ buildscript {
         mavenCentral()
         mavenLocal()
     }
-    ext.android_gradle = '8.7.3'
     dependencies {
         classpath "com.android.tools.build:gradle:$android_gradle"
-        //classpath "mobi.cangol.mobile:fir-gradle-plugin:$POM_VERSION"
     }
 }
 allprojects {

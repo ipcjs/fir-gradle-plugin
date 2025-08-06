@@ -11,8 +11,8 @@ Usage
                 }
             }
             dependencies {
-                classpath 'com.android.tools.build:gradle:7.3.0'
-                classpath 'mobi.cangol.mobile:fir-gradle-plugin:2.2.0'
+                classpath 'com.android.tools.build:gradle:8.7.3'
+                classpath 'mobi.cangol.mobile:fir-gradle-plugin:2.3.0'
             }
         }
 
@@ -25,7 +25,7 @@ Usage
         }
                 
                 
-         './gradlew publishFirApkDebug
+         './gradlew publishFirApkRelease
 
 Contributing
 -----------
