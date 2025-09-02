@@ -24,7 +24,10 @@ class FirPublisherPlugin implements Plugin<Project> {
         def bugHdExtension = project.extensions.create('bughd', BugHdPublisherPluginExtension)
 
         androidComponents.with {
-            onVariants(selector().withBuildType('release')) { Variant variant ->
+            onVariants(selector().all()) { Variant variant ->
+                if(variant.buildType == 'debug') {
+                    return
+                }
                 if (firExtension == null) {
                     log.error("Please config your fir.im apiToken in your build.gradle.")
                     return
